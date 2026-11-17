@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FolioVault — Physical Document Scanner &amp; Archival Vault</title>
+  <meta name="description" content="FolioVault scans, deskews, enhances, indexes, and stores physical documents locally in IndexedDB with real-time HTML5 Canvas filters and OCR metadata search." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c84b24'/%3E%3Cpath d='M10 8h9l5 5v11a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z' fill='none' stroke='%23ffffff' stroke-width='2.2'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,600;1,6..72,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles/tokens.css" />
+  <link rel="stylesheet" href="styles/main.css" />
+  <link rel="stylesheet" href="styles/studio.css" />
+  <script defer src="js/db.js"></script>
+  <script defer src="js/samples.js"></script>
+  <script defer src="js/scanner.js"></script>
+  <script defer src="js/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Archival Folders Sidebar -->
+    <aside id="sidebar" class="sidebar" aria-label="Document folders">
+      <div class="brand">
+        <span class="brand__stamp" aria-hidden="true">FV</span>
+        <span class="brand__name">FolioVault</span>
+      </div>
+
+      <div>
+        <div class="nav-section-label">Filing Cabinet</div>
+        <nav id="folder-list" class="folder-list"></nav>
+      </div>
+
+      <div class="storage-card">
+        <div class="storage-card__head">
+          <span>INDEXEDDB VAULT</span>
+          <span class="storage-badge">LOCAL</span>
+        </div>
+        <span id="storage-summary" class="mono">0 scans stored locally</span>
+        <p style="margin: 0; color: var(--ink-muted);">
+          Uploaded images and PDFs persist inside your browser database without uploading to external servers.
+        </p>
+        <button id="reset-vault-btn" type="button" class="btn btn--ghost btn--sm" style="width: 100%;">
+          Reset Sample Scans
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <div class="main-area">
+      <header class="topbar">
+        <div class="search-wrap">
+          <button id="mobile-nav-btn" type="button" class="btn btn--ghost btn--sm mobile-nav-btn" aria-label="Open folders">Folders</button>
+          <label for="search-input" class="sr-only">Search documents and OCR text</label>
+          <input id="search-input" type="search" class="search-input" placeholder="Search title, issuer, #tag, or OCR text..." />
+        </div>
+
+        <div class="topbar__actions">
+          <button id="theme-toggle" type="button" class="btn btn--secondary">Dark Vault</button>
+          <button id="open-studio-btn" type="button" class="btn btn--primary">+ Scan Document</button>
+        </div>
+      </header>
+
+      <main class="workspace-body">
+        <!-- Interactive Dropzone -->
+        <section id="dropzone" class="dropzone" aria-label="Upload or scan physical document">
+          <div>
+            <h2 class="dropzone__title">Scan, straighten, and archive paper records.</h2>
+            <p class="dropzone__sub">
+              Drop a photo or PDF here to apply live Magic Scan whitening, deskew angles, and OCR indexing.
+            </p>
+          </div>
+          <div class="dropzone__btns">
+            <input id="file-input" type="file" accept="image/*,.pdf" hidden />
+            <button id="browse-file-btn" type="button" class="btn btn--secondary">Upload File</button>
+            <button id="sample-scan-btn" type="button" class="btn btn--primary">Try Crooked Photo Scan</button>
+          </div>
+        </section>
+
+        <!-- Vault Toolbar -->
+        <section class="vault-bar" aria-label="Vault sorting and view controls">
+          <div class="vault-bar__title">
+            <h1 id="folder-heading">All Documents</h1>
+            <span id="doc-count-badge" class="stamp-pill">0 files</span>
+          </div>
+
+          <div class="vault-controls">
+            <select id="sort-select" class="select" aria-label="Sort documents">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="title">Title (A-Z)</option>
+            </select>
+
+            <div class="segmented" role="group" aria-label="Switch layout view">
+              <button type="button" class="is-active" data-view="grid" aria-pressed="true">Grid</button>
+              <button type="button" data-view="list" aria-pressed="false">List</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Document Grid / List -->
+        <section aria-label="Stored documents">
+          <div id="doc-grid" class="doc-grid"></div>
+
+          <div id="doc-table-wrap" class="doc-table-wrap" hidden>
+            <table class="doc-table">
+              <thead>
+                <tr>
+                  <th>Serial</th>
+                  <th>Document Title</th>
+                  <th>Issuer</th>
+                  <th>Doc Date</th>
+                  <th>Folder</th>
+                </tr>
+              </thead>
+              <tbody id="doc-table-body"></tbody>
+            </table>
+          </div>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <strong>No matching documents in this view</strong>
+            <p style="margin: 0.35rem 0 0;">Try clearing your search filter or scan a new document above.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Interactive Scan & Enhance Studio Modal -->
+  <div id="studio-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="studio-title" aria-hidden="true">
+    <div class="studio-dialog">
+      <div class="dialog-head">
+        <div>
+          <h2 id="studio-title">Scan &amp; Enhancement Studio</h2>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="studio-webcam-btn" type="button" class="btn btn--secondary btn--sm">Use Camera</button>
+          <button id="studio-crooked-btn" type="button" class="btn btn--secondary btn--sm">Load Sample Photo</button>
+          <button id="close-studio-btn" type="button" class="btn btn--ghost btn--sm">Close</button>
+        </div>
+      </div>
+
+      <div class="dialog-body">
+        <div class="stage-pane">
+          <div class="stage-toolbar">
+            <div class="preset-row" role="group" aria-label="Scan filter preset">
+              <button type="button" class="filter-pill" data-scan-filter="original" aria-pressed="false">Original</button>
+              <button type="button" class="filter-pill is-active" data-scan-filter="magic" aria-pressed="true">Magic Scan</button>
+              <button type="button" class="filter-pill" data-scan-filter="bw" aria-pressed="false">Crisp B&amp;W Ink</button>
+              <button type="button" class="filter-pill" data-scan-filter="archive" aria-pressed="false">Warm Archive</button>
+            </div>
+            <button id="studio-rotate-btn" type="button" class="btn btn--secondary btn--sm">Rotate 90°</button>
+          </div>
+
+          <div id="studio-canvas-wrap" class="canvas-viewport">
+            <canvas id="studio-canvas" aria-label="Document enhancement preview"></canvas>
+          </div>
+
+          <div id="webcam-box" class="webcam-box" hidden>
+            <video id="webcam-video" autoplay playsinline muted></video>
+            <div style="display: flex; gap: 0.5rem;">
+              <button id="capture-frame-btn" type="button" class="btn btn--primary btn--sm">Capture Scan</button>
+              <button id="cancel-cam-btn" type="button" class="btn btn--secondary btn--sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls-pane">
+          <div class="slider-group">
+            <div class="slider-row">
+              <div class="slider-row__head">
+                <label for="scan-deskew">Fine Deskew Straighten</label>
+                <span id="val-deskew" class="mono">0.0°</span>
+              </div>
+              <input id="scan-deskew" type="range" min="-15" max="15" step="0.5" value="0" />
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-row__head">
+                <label for="scan-brightness">Paper Brightness</label>
+                <span id="val-brightness" class="mono">0</span>
+              </div>
+              <input id="scan-brightness" type="range" min="-40" max="40" step="1" value="0" />
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-row__head">
+                <label for="scan-contrast">Ink Contrast</label>
+                <span id="val-contrast" class="mono">15</span>
+              </div>
+              <input id="scan-contrast" type="range" min="-30" max="60" step="1" value="15" />
+            </div>
+          </div>
+
+          <form id="studio-form" class="field-grid">
+            <div class="field">
+              <label for="st-title">Document Title</label>
+              <input id="st-title" name="title" type="text" required />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="st-cat">Folder</label>
+                <select id="st-cat" name="category">
+                  <option value="receipts">Receipts &amp; Tax</option>
+                  <option value="legal">Legal &amp; Contracts</option>
+                  <option value="identity">Identity &amp; Travel</option>
+                  <option value="medical">Medical</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="st-date">Document Date</label>
+                <input id="st-date" name="docDate" type="date" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="st-issuer">Issuer / Organization</label>
+                <input id="st-issuer" name="issuer" type="text" placeholder="e.g. City Tax Office" />
+              </div>
+              <div class="field">
+                <label for="st-tags">Tags (comma separated)</label>
+                <input id="st-tags" name="tags" type="text" placeholder="tax, signed" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="st-ocr">Searchable OCR Notes</label>
+              <textarea id="st-ocr" name="ocrText" placeholder="Extracted or transcribed text for instant search..."></textarea>
+            </div>
+            <button type="submit" class="btn btn--primary" style="width: 100%;">Save Scan to Vault</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document Lightbox Inspector Modal -->
+  <div id="inspector-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="inspector-serial" aria-hidden="true">
+    <div class="inspector-dialog">
+      <div class="dialog-head">
+        <div>
+          <span id="inspector-serial" class="mono" style="font-size: 0.85rem; font-weight: 600;">FV-2026-001</span>
+        </div>
+        <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+          <button id="zoom-out-btn" type="button" class="btn btn--secondary btn--sm">-</button>
+          <span id="zoom-label" class="mono" style="align-self: center; font-size: 0.8rem; min-width: 44px; text-align: center;">100%</span>
+          <button id="zoom-in-btn" type="button" class="btn btn--secondary btn--sm">+</button>
+          <button id="inspector-rotate-btn" type="button" class="btn btn--secondary btn--sm">Rotate</button>
+          <button id="close-inspector-btn" type="button" class="btn btn--ghost btn--sm">Close</button>
+        </div>
+      </div>
+
+      <div class="dialog-body">
+        <div class="stage-pane">
+          <div class="inspector-zoom-stage">
+            <img id="inspector-img" alt="Stored physical document scan" />
+          </div>
+        </div>
+
+        <form id="inspector-form" class="controls-pane">
+          <div class="field">
+            <label for="in-title">Document Title</label>
+            <input id="in-title" name="title" type="text" required />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="in-cat">Folder</label>
+              <select id="in-cat" name="category">
+                <option value="receipts">Receipts &amp; Tax</option>
+                <option value="legal">Legal &amp; Contracts</option>
+                <option value="identity">Identity &amp; Travel</option>
+                <option value="medical">Medical</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="in-date">Document Date</label>
+              <input id="in-date" name="docDate" type="date" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="in-issuer">Issuer</label>
+              <input id="in-issuer" name="issuer" type="text" />
+            </div>
+            <div class="field">
+              <label for="in-tags">Tags</label>
+              <input id="in-tags" name="tags" type="text" />
+            </div>
+          </div>
+          <div class="field">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.28rem;">
+              <label for="in-ocr" style="margin: 0;">Extracted OCR Text</label>
+              <button id="copy-ocr-btn" type="button" class="btn btn--ghost btn--sm" style="height: 24px; font-size: 0.72rem;">Copy Text</button>
+            </div>
+            <textarea id="in-ocr" name="ocrText"></textarea>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-top: auto;">
+            <button id="delete-doc-btn" type="button" class="btn btn--danger btn--sm">Delete</button>
+            <button id="download-doc-btn" type="button" class="btn btn--secondary btn--sm">Download</button>
+            <button type="submit" class="btn btn--primary btn--sm" style="flex: 1;">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
